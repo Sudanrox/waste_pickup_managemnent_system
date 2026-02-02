@@ -1,0 +1,304 @@
+rules_version = '2';
+
+// ============================================
+// KWPM - Kathmandu Waste Pickup Management
+// Firestore Security Rules
+// Version: 1.0
+// ============================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user has customer role (custom claim)
+    function isCustomer() {
+      return isAuthenticated() &&
+             request.auth.token.role == 'customer';
+    }
+
+    // Check if user has admin role (custom claim)
+    function isAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.role == 'admin';
+    }
+
+    // Check if user has super_admin role (custom claim)
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.role == 'super_admin';
+    }
+
+    // Check if user is any type of admin
+    function isAnyAdmin() {
+      return isAdmin() || isSuperAdmin();
+    }
+
+    // Get customer document for current user
+    function getCustomer() {
+      return get(/databases/$(database)/documents/customers/$(request.auth.uid));
+    }
+
+    // Get customer's ward number
+    function getCustomerWardNumber() {
+      return getCustomer().data.wardNumber;
+    }
+
+    // Check if customer belongs to a specific ward
+    function customerBelongsToWard(wardNumber) {
+      return isAuthenticated() && getCustomerWardNumber() == wardNumber;
+    }
+
+    // Validate ward number is between 1-32
+    function isValidWardNumber(wardNumber) {
+      return wardNumber is int && wardNumber >= 1 && wardNumber <= 32;
+    }
+
+    // Validate phone number format (Nepali)
+    function isValidPhoneNumber(phone) {
+      return phone is string &&
+             phone.size() >= 10 &&
+             phone.matches('^\\+977[0-9]{10}$');
+    }
+
+    // Validate name
+    function isValidName(name) {
+      return name is string &&
+             name.size() >= 2 &&
+             name.size() <= 50;
+    }
+
+    // Check if timestamp is recent (within last hour)
+    function isRecentTimestamp(ts) {
+      return ts is timestamp &&
+             ts > request.time - duration.value(1, 'h');
+    }
+
+    // ============================================
+    // ORGANIZATION RULES
+    // ============================================
+    match /organizations/{orgId} {
+      // Anyone authenticated can read organization info
+      allow read: if isAuthenticated();
+
+      // Only super admins can modify organization
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // WARD RULES
+    // ============================================
+    match /wards/{wardId} {
+      // Anyone authenticated can read wards (needed for ward picker)
+      allow read: if isAuthenticated();
+
+      // Only admins can create/update wards
+      allow create, update: if isAnyAdmin();
+
+      // Only super admins can delete wards
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // CUSTOMER RULES
+    // ============================================
+    match /customers/{customerId} {
+      // Customers can read their own profile
+      // Admins can read any customer profile
+      allow read: if isOwner(customerId) || isAnyAdmin();
+
+      // Customers can create their own profile during registration
+      // Must include required fields and valid ward number
+      allow create: if isOwner(customerId) &&
+                       request.resource.data.keys().hasAll([
+                         'phoneNumber', 'name', 'wardId', 'wardNumber',
+                         'language', 'createdAt', 'updatedAt', 'isActive'
+                       ]) &&
+                       isValidWardNumber(request.resource.data.wardNumber) &&
+                       isValidName(request.resource.data.name) &&
+                       request.resource.data.isActive == true;
+
+      // Customers can update their own profile (limited fields)
+      allow update: if isOwner(customerId) &&
+                       // Only allow updating these specific fields
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'wardId', 'wardNumber', 'fcmToken',
+                                   'language', 'updatedAt']) &&
+                       // Validate ward number if being changed
+                       (
+                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['wardNumber']) ||
+                         isValidWardNumber(request.resource.data.wardNumber)
+                       ) &&
+                       // Validate name if being changed
+                       (
+                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['name']) ||
+                         isValidName(request.resource.data.name)
+                       ) &&
+                       // Cannot change phoneNumber or isActive
+                       request.resource.data.phoneNumber == resource.data.phoneNumber &&
+                       request.resource.data.isActive == resource.data.isActive;
+
+      // Admins can update any customer (e.g., deactivate account)
+      allow update: if isAnyAdmin();
+
+      // Only super admins can delete customer accounts
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // ADMIN RULES
+    // ============================================
+    match /admins/{adminId} {
+      // Admins can read their own profile
+      // Super admins can read any admin profile
+      allow read: if isOwner(adminId) || isSuperAdmin();
+
+      // Only super admins can create new admin accounts
+      allow create: if isSuperAdmin() &&
+                       request.resource.data.keys().hasAll([
+                         'email', 'name', 'role', 'createdAt', 'isActive'
+                       ]) &&
+                       request.resource.data.role in ['admin', 'super_admin'];
+
+      // Admins can update their own profile (limited fields)
+      allow update: if isOwner(adminId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'updatedAt']);
+
+      // Super admins can update any admin
+      allow update: if isSuperAdmin();
+
+      // Only super admins can delete admin accounts
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // NOTIFICATION RULES
+    // ============================================
+    match /notifications/{notificationId} {
+      // Customers can only read notifications for their ward
+      // Admins can read all notifications
+      allow read: if isAnyAdmin() ||
+                    (isAuthenticated() &&
+                     resource.data.wardNumber == getCustomerWardNumber());
+
+      // Only admins can create notifications
+      allow create: if isAnyAdmin() &&
+                       request.resource.data.keys().hasAll([
+                         'wardId', 'wardNumber', 'scheduledDate', 'scheduledTime',
+                         'messageText', 'status', 'createdBy', 'createdAt',
+                         'responseStats', 'isRescheduled'
+                       ]) &&
+                       isValidWardNumber(request.resource.data.wardNumber) &&
+                       request.resource.data.status == 'scheduled' &&
+                       request.resource.data.createdBy == request.auth.uid;
+
+      // Only admins can update notifications
+      allow update: if isAnyAdmin() &&
+                       // Cannot change ward or createdBy
+                       request.resource.data.wardId == resource.data.wardId &&
+                       request.resource.data.wardNumber == resource.data.wardNumber &&
+                       request.resource.data.createdBy == resource.data.createdBy;
+
+      // Only super admins can delete notifications
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // RESPONSE RULES
+    // ============================================
+    match /responses/{responseId} {
+      // Customers can read their own responses
+      // Admins can read all responses
+      allow read: if isAnyAdmin() ||
+                    (isAuthenticated() &&
+                     resource.data.customerId == request.auth.uid);
+
+      // Customers can create their own response
+      // Response ID must follow format: {notificationId}_{customerId}
+      allow create: if isAuthenticated() &&
+                       // Must be creating for themselves
+                       request.resource.data.customerId == request.auth.uid &&
+                       // Response ID must match expected format
+                       responseId == (request.resource.data.notificationId + '_' + request.auth.uid) &&
+                       // Must have required fields
+                       request.resource.data.keys().hasAll([
+                         'notificationId', 'customerId', 'customerName',
+                         'wardId', 'wardNumber', 'response', 'respondedAt', 'updatedAt'
+                       ]) &&
+                       // Response must be 'yes' or 'no'
+                       request.resource.data.response in ['yes', 'no'] &&
+                       // Ward must match customer's ward
+                       request.resource.data.wardNumber == getCustomerWardNumber();
+
+      // Customers can update their own response (change from yes to no or vice versa)
+      allow update: if isAuthenticated() &&
+                       // Must be their own response
+                       resource.data.customerId == request.auth.uid &&
+                       request.resource.data.customerId == request.auth.uid &&
+                       // Cannot change notification or customer reference
+                       request.resource.data.notificationId == resource.data.notificationId &&
+                       // Can only change response and updatedAt
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['response', 'updatedAt']) &&
+                       // Response must be 'yes' or 'no'
+                       request.resource.data.response in ['yes', 'no'];
+
+      // Only admins can delete responses (for cleanup)
+      allow delete: if isAnyAdmin();
+    }
+
+    // ============================================
+    // FCM TOPICS TRACKING (Admin visibility only)
+    // ============================================
+    match /fcmTopics/{topicId} {
+      // Only admins can read topic subscriber info
+      allow read: if isAnyAdmin();
+
+      // Only Cloud Functions can write (deny all client writes)
+      allow write: if false;
+    }
+
+    // ============================================
+    // ANALYTICS / STATS (Future use)
+    // ============================================
+    match /analytics/{docId} {
+      // Only admins can read analytics
+      allow read: if isAnyAdmin();
+
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+
+    // ============================================
+    // AUDIT LOGS (Future use)
+    // ============================================
+    match /auditLogs/{logId} {
+      // Only super admins can read audit logs
+      allow read: if isSuperAdmin();
+
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+
+    // ============================================
+    // DEFAULT DENY RULE
+    // ============================================
+    // Deny all other document access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
