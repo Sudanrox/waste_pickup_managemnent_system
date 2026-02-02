@@ -22,10 +22,10 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'asia-south1');
 
-// Connect to emulators in development
-if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true') {
+// Connect to emulators in development (always enabled for local dev)
+if (import.meta.env.DEV) {
   import('firebase/auth').then(({ connectAuthEmulator }) => {
-    connectAuthEmulator(auth, 'http://localhost:9099');
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   });
   import('firebase/firestore').then(({ connectFirestoreEmulator }) => {
     connectFirestoreEmulator(db, 'localhost', 8080);
@@ -33,6 +33,7 @@ if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true') {
   import('firebase/functions').then(({ connectFunctionsEmulator }) => {
     connectFunctionsEmulator(functions, 'localhost', 5001);
   });
+  console.log('🔧 Connected to Firebase Emulators');
 }
 
 export default app;
