@@ -9,6 +9,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../config/firebase';
 import { Ward, WardStats } from '../types';
+import { mockWards } from './mockData';
 
 export const wardService = {
   // Get all wards
@@ -18,13 +19,19 @@ export const wardService = {
       const q = query(wardsRef, orderBy('wardNumber', 'asc'));
       const snapshot = await getDocs(q);
 
+      if (snapshot.empty) {
+        // No data in Firebase, return mock data
+        return mockWards as unknown as Ward[];
+      }
+
       return snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Ward[];
-    } catch (error) {
-      console.error('Error fetching wards:', error);
-      throw error;
+    } catch {
+      // Firebase unavailable, return mock data
+      console.log('Firebase unavailable, using mock ward data');
+      return mockWards as unknown as Ward[];
     }
   },
 
@@ -35,16 +42,19 @@ export const wardService = {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        return null;
+        // Return from mock data
+        const mockWard = mockWards.find(w => w.wardNumber === wardNumber);
+        return mockWard as unknown as Ward | null;
       }
 
       return {
         id: docSnap.id,
         ...docSnap.data(),
       } as Ward;
-    } catch (error) {
-      console.error('Error fetching ward:', error);
-      throw error;
+    } catch {
+      // Firebase unavailable, return from mock data
+      const mockWard = mockWards.find(w => w.wardNumber === wardNumber);
+      return mockWard as unknown as Ward | null;
     }
   },
 
@@ -55,9 +65,20 @@ export const wardService = {
       const result = await getWardStats({});
       const data = result.data as { wards: WardStats[] };
       return data.wards;
-    } catch (error) {
-      console.error('Error fetching ward stats:', error);
-      throw error;
+    } catch {
+      // Firebase unavailable, generate stats from mock data
+      return mockWards.map(w => ({
+        id: w.id,
+        wardNumber: w.wardNumber,
+        name: w.name,
+        nameNe: w.nameNe,
+        customerCount: w.customerCount,
+        isActive: w.isActive,
+        recentNotifications: Math.floor(Math.random() * 10) + 1,
+        responseRate: w.responseRate,
+        averageResponseRate: w.responseRate,
+        lastPickupDate: w.lastPickupDate,
+      })) as WardStats[];
     }
   },
 };

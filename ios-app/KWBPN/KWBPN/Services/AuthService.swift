@@ -16,6 +16,7 @@ protocol AuthServiceProtocol {
 
     func sendOTP(to phoneNumber: String) async throws -> String
     func verifyOTP(verificationId: String, code: String) async throws -> FirebaseAuth.User
+    func signInWithEmail(email: String, password: String) async throws -> FirebaseAuth.User
     func signOut() throws
 }
 
@@ -99,6 +100,20 @@ final class AuthService: AuthServiceProtocol {
         }
     }
 
+    // MARK: - Email/Password Auth (for Emulator Testing)
+    func signInWithEmail(email: String, password: String) async throws -> FirebaseAuth.User {
+        Logger.info("Signing in with email (emulator mode)")
+
+        do {
+            let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            Logger.info("Email sign-in successful for user: \(result.user.uid)")
+            return result.user
+        } catch {
+            Logger.error("Email sign-in failed: \(error.localizedDescription)")
+            throw mapAuthError(error)
+        }
+    }
+
     // MARK: - Error Mapping
     private func mapAuthError(_ error: Error) -> AppError {
         let nsError = error as NSError
@@ -136,6 +151,11 @@ final class MockAuthService: AuthServiceProtocol {
     }
 
     func verifyOTP(verificationId: String, code: String) async throws -> FirebaseAuth.User {
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        throw AppError.unknown("Mock auth - use real Firebase in actual app")
+    }
+
+    func signInWithEmail(email: String, password: String) async throws -> FirebaseAuth.User {
         try await Task.sleep(nanoseconds: 1_000_000_000)
         throw AppError.unknown("Mock auth - use real Firebase in actual app")
     }

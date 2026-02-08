@@ -7,12 +7,12 @@ import Input from '../../components/ui/Input';
 import { User, Shield, Bell, LogOut, Save } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const [saving, setSaving] = useState(false);
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await signOut();
     } catch (error) {
       console.error('Logout error:', error);
     }

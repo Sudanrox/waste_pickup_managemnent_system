@@ -103,13 +103,6 @@ struct ChangeWardView: View {
     }
 }
 
-struct LanguageSettingsView: View {
-    var body: some View {
-        Text("Language Settings")
-            .navigationTitle("Language")
-    }
-}
-
 // MARK: - Preview
 #Preview {
     MainTabView()

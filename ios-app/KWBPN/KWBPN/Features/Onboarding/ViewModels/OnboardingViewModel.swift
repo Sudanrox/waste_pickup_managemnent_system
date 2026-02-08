@@ -158,4 +158,30 @@ final class OnboardingViewModel: ObservableObject {
         otpError = nil
         isLoading = false
     }
+
+    // MARK: - Emulator Test Login
+    func testLoginWithEmulator() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Test credentials matching what we created in the emulator
+            let user = try await authService.signInWithEmail(
+                email: "testuser@kwpm.com",
+                password: "test123"
+            )
+            Logger.info("Emulator test login successful for user: \(user.uid)")
+            // AppState will handle the auth state change
+
+        } catch let error as AppError {
+            Logger.error("Emulator test login failed: \(error.localizedDescription)")
+            alertItem = AlertItem(error: error)
+        } catch {
+            Logger.error("Emulator test login error: \(error.localizedDescription)")
+            alertItem = AlertItem(
+                title: "Login Failed",
+                message: "Could not connect to emulator. Make sure Firebase emulators are running."
+            )
+        }
+    }
 }

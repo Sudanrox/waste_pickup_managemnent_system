@@ -7,6 +7,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import NotificationsPage from './pages/notifications/NotificationsPage';
 import CreateNotificationPage from './pages/notifications/CreateNotificationPage';
 import NotificationDetailPage from './pages/notifications/NotificationDetailPage';
+import CalendarPage from './pages/calendar/CalendarPage';
 import WardsPage from './pages/wards/WardsPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
@@ -43,6 +44,7 @@ function App() {
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/notifications/create" element={<CreateNotificationPage />} />
         <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/wards" element={<WardsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

@@ -1,5 +1,10 @@
+/**
+ * Dashboard Page
+ * Main overview showing stats, today's pickups, calendar preview, and recent notifications
+ */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Users,
   Bell,
@@ -10,83 +15,352 @@ import {
   ArrowRight,
   CheckCircle,
   XCircle,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge, { StatusBadge } from '../../components/ui/Badge';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { dashboardService } from '../../services/dashboard.service';
-import { format } from 'date-fns';
+import {
+  mockDashboardStats,
+  mockTodayPickups,
+  mockUpcomingPickups,
+  mockNotifications,
+  mockWards,
+  generateMockNotifications,
+} from '../../services/mockData';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths } from 'date-fns';
+import { useState, useMemo } from 'react';
 
 export default function DashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: dashboardService.getStats,
-  });
+  const { t } = useTranslation();
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  // Use mock data for stats
+  const stats = mockDashboardStats;
+  const todayPickups = mockTodayPickups;
+  const upcomingPickups = mockUpcomingPickups;
+
+  // Fetch recent notifications (can fallback to mock)
   const { data: recentNotifications, isLoading: notificationsLoading } = useQuery({
     queryKey: ['recent-notifications'],
     queryFn: () => dashboardService.getRecentNotifications(5),
   });
 
+  // Use mock notifications as fallback
+  const displayNotifications = recentNotifications || generateMockNotifications(5).map(n => ({
+    id: n.id,
+    wardNumber: n.wardNumber,
+    scheduledDate: n.scheduledDate,
+    status: n.status,
+    yesCount: n.responseStats.yesCount,
+    noCount: n.responseStats.noCount,
+  }));
+
+  // Generate calendar days
+  const calendarDays = useMemo(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+    const days = eachDayOfInterval({ start, end });
+
+    // Add padding days at the start
+    const startPadding = start.getDay();
+    const paddedDays = [];
+
+    for (let i = startPadding - 1; i >= 0; i--) {
+      const day = new Date(start);
+      day.setDate(day.getDate() - (i + 1));
+      paddedDays.push({ date: day, isCurrentMonth: false });
+    }
+
+    days.forEach(day => {
+      paddedDays.push({ date: day, isCurrentMonth: true });
+    });
+
+    return paddedDays;
+  }, [currentMonth]);
+
+  // Check if a day has pickups
+  const hasPickup = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return upcomingPickups[dateStr]?.length > 0;
+  };
+
+  const getPickupCount = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return upcomingPickups[dateStr]?.length || 0;
+  };
+
   return (
     <div>
       <Header
-        title="Dashboard"
-        description="Welcome back! Here's an overview of your system."
+        title={t('dashboard.title')}
+        description={t('dashboard.welcome')}
         actions={
           <Link to="/notifications/create">
             <Button leftIcon={<Plus className="w-4 h-4" />}>
-              New Notification
+              {t('dashboard.newNotification')}
             </Button>
           </Link>
         }
       />
 
       <div className="p-8 space-y-8">
-        {/* Stats Grid */}
+        {/* Stats Grid - 4 key metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Total Customers"
-            value={stats?.totalCustomers || 0}
+            title={t('dashboard.totalCustomers')}
+            value={stats.totalCustomers.toLocaleString()}
             icon={Users}
             color="blue"
-            loading={statsLoading}
           />
           <StatsCard
-            title="Active Wards"
-            value={`${stats?.activeWards || 0}/${stats?.totalWards || 32}`}
+            title={t('dashboard.activeWards')}
+            value={`${stats.activeWards}/32`}
             icon={MapPin}
             color="green"
-            loading={statsLoading}
           />
           <StatsCard
-            title="Today's Pickups"
-            value={stats?.todayPickups || 0}
+            title={t('dashboard.upcomingPickups')}
+            value={stats.upcomingPickups}
+            subtitle="7 days"
             icon={Calendar}
             color="purple"
-            loading={statsLoading}
           />
           <StatsCard
-            title="Response Rate"
-            value={`${stats?.overallResponseRate || 0}%`}
+            title={t('dashboard.responseRate')}
+            value={`${stats.responseRate}%`}
             icon={TrendingUp}
             color="orange"
-            loading={statsLoading}
           />
         </div>
 
+        {/* Today's Pickups Table & Calendar Preview */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Today's Pickups by Ward Table */}
+          <Card className="lg:col-span-2">
+            <CardHeader
+              title={t('dashboard.todayPickupsByWard')}
+              description={`${todayPickups.length} pickups scheduled`}
+              action={
+                <Link to="/notifications">
+                  <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
+                    {t('dashboard.viewAll')}
+                  </Button>
+                </Link>
+              }
+            />
+            {todayPickups.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Ward
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Time
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Customers
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Responses
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {todayPickups.map((pickup, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center">
+                              <span className="text-primary-700 font-bold text-sm">
+                                {pickup.wardNumber}
+                              </span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {pickup.wardName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            {pickup.scheduledTime}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {pickup.totalCustomers}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-success-500 h-2 rounded-full"
+                                style={{
+                                  width: `${(pickup.responded / pickup.totalCustomers) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {pickup.responded}/{pickup.totalCustomers}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <Badge
+                            variant={pickup.status === 'in_progress' ? 'success' : 'warning'}
+                          >
+                            {pickup.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>{t('dashboard.noPickupsToday')}</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Mini Calendar Preview */}
+          <Card>
+            <CardHeader
+              title={t('dashboard.pickupCalendar')}
+              description={format(currentMonth, 'MMMM yyyy')}
+              action={
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              }
+            />
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {/* Day headers */}
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                <div
+                  key={idx}
+                  className="text-center text-xs font-medium text-gray-500 py-2"
+                >
+                  {day}
+                </div>
+              ))}
+              {/* Calendar days */}
+              {calendarDays.map(({ date, isCurrentMonth }, idx) => {
+                const hasPickupOnDay = hasPickup(date);
+                const pickupCount = getPickupCount(date);
+                const isTodayDate = isToday(date);
+
+                return (
+                  <div
+                    key={idx}
+                    className={`
+                      relative text-center py-2 text-sm rounded-lg cursor-pointer
+                      ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                      ${isTodayDate ? 'bg-primary-100 text-primary-700 font-bold' : ''}
+                      ${hasPickupOnDay && !isTodayDate ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-gray-50'}
+                    `}
+                    title={hasPickupOnDay ? `${pickupCount} pickups` : undefined}
+                  >
+                    {format(date, 'd')}
+                    {hasPickupOnDay && (
+                      <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-success-500" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Legend & View Full Calendar Link */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-primary-100 border border-primary-300" />
+                  <span>Today</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-success-500" />
+                  <span>Scheduled</span>
+                </div>
+              </div>
+              <Link to="/calendar">
+                <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
+                  Full Calendar
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+
+        {/* Response Analytics Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Response Distribution Pie Chart */}
+          <Card>
+            <CardHeader
+              title="Response Overview"
+              description="Aggregate YES/NO/Pending across all notifications"
+            />
+            <ResponsePieChart notifications={mockNotifications} />
+          </Card>
+
+          {/* Ward Response Rates Bar Chart */}
+          <Card>
+            <CardHeader
+              title="Response Rate by Ward"
+              description="Top 10 wards by response rate"
+            />
+            <WardResponseBarChart wards={mockWards} />
+          </Card>
+        </div>
+
+        {/* Recent Notifications & Quick Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Notifications */}
           <Card>
             <CardHeader
-              title="Recent Notifications"
+              title={t('dashboard.recentNotifications')}
               description="Latest pickup notifications sent"
               action={
                 <Link to="/notifications">
                   <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
-                    View All
+                    {t('dashboard.viewAll')}
                   </Button>
                 </Link>
               }
@@ -95,9 +369,9 @@ export default function DashboardPage() {
               <div className="flex justify-center py-8">
                 <LoadingSpinner />
               </div>
-            ) : recentNotifications && recentNotifications.length > 0 ? (
+            ) : displayNotifications && displayNotifications.length > 0 ? (
               <div className="space-y-4">
-                {recentNotifications.map((notification) => (
+                {displayNotifications.slice(0, 5).map((notification) => (
                   <Link
                     key={notification.id}
                     to={`/notifications/${notification.id}`}
@@ -125,7 +399,7 @@ export default function DashboardPage() {
                           <span className="text-gray-600">{notification.noCount}</span>
                         </div>
                       </div>
-                      <StatusBadge status={notification.status} />
+                      <StatusBadge status={notification.status as 'scheduled' | 'sent' | 'completed' | 'cancelled'} />
                     </div>
                   </Link>
                 ))}
@@ -140,7 +414,7 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <Card>
             <CardHeader
-              title="Quick Actions"
+              title={t('dashboard.quickActions')}
               description="Common tasks and shortcuts"
             />
             <div className="grid grid-cols-2 gap-4">
@@ -184,16 +458,19 @@ export default function DashboardPage() {
   );
 }
 
+// ============================================
 // Stats Card Component
+// ============================================
 interface StatsCardProps {
   title: string;
   value: string | number;
+  subtitle?: string;
   icon: React.ElementType;
   color: 'blue' | 'green' | 'purple' | 'orange';
   loading?: boolean;
 }
 
-function StatsCard({ title, value, icon: Icon, color, loading }: StatsCardProps) {
+function StatsCard({ title, value, subtitle, icon: Icon, color, loading }: StatsCardProps) {
   const colors = {
     blue: 'bg-blue-100 text-blue-600',
     green: 'bg-green-100 text-green-600',
@@ -212,7 +489,12 @@ function StatsCard({ title, value, icon: Icon, color, loading }: StatsCardProps)
           {loading ? (
             <div className="h-8 w-20 bg-gray-200 rounded animate-pulse mt-1" />
           ) : (
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-gray-900">{value}</p>
+              {subtitle && (
+                <span className="text-xs text-gray-400">{subtitle}</span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -220,7 +502,9 @@ function StatsCard({ title, value, icon: Icon, color, loading }: StatsCardProps)
   );
 }
 
+// ============================================
 // Quick Action Card Component
+// ============================================
 interface QuickActionCardProps {
   icon: React.ElementType;
   title: string;
@@ -248,6 +532,107 @@ function QuickActionCard({ icon: Icon, title, description, color }: QuickActionC
       <Icon className={`w-8 h-8 mb-3 ${iconColors[color]}`} />
       <h4 className="font-medium text-gray-900">{title}</h4>
       <p className="text-sm text-gray-500">{description}</p>
+    </div>
+  );
+}
+
+// ============================================
+// Response Pie Chart Component
+// ============================================
+
+const PIE_COLORS = ['#22c55e', '#ef4444', '#94a3b8'];
+
+interface MockNotification {
+  responseStats: {
+    totalCustomers: number;
+    yesCount: number;
+    noCount: number;
+  };
+}
+
+function ResponsePieChart({ notifications }: { notifications: MockNotification[] }) {
+  const data = useMemo(() => {
+    const totals = notifications.reduce(
+      (acc, n) => ({
+        yes: acc.yes + n.responseStats.yesCount,
+        no: acc.no + n.responseStats.noCount,
+        pending:
+          acc.pending +
+          (n.responseStats.totalCustomers - n.responseStats.yesCount - n.responseStats.noCount),
+      }),
+      { yes: 0, no: 0, pending: 0 }
+    );
+
+    return [
+      { name: 'Yes', value: totals.yes },
+      { name: 'No', value: totals.no },
+      { name: 'Pending', value: totals.pending },
+    ];
+  }, [notifications]);
+
+  return (
+    <div className="h-64">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={55}
+            outerRadius={90}
+            paddingAngle={3}
+            dataKey="value"
+            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          >
+            {data.map((_, index) => (
+              <Cell key={`cell-${index}`} fill={PIE_COLORS[index]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value: number) => value.toLocaleString()} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ============================================
+// Ward Response Rate Bar Chart Component
+// ============================================
+
+interface MockWard {
+  wardNumber: number;
+  name: string;
+  responseRate: number;
+  customerCount: number;
+}
+
+function WardResponseBarChart({ wards }: { wards: MockWard[] }) {
+  const data = useMemo(() => {
+    return [...wards]
+      .sort((a, b) => b.responseRate - a.responseRate)
+      .slice(0, 10)
+      .map((w) => ({
+        ward: `W${w.wardNumber}`,
+        name: w.name,
+        rate: w.responseRate,
+        customers: w.customerCount,
+      }));
+  }, [wards]);
+
+  return (
+    <div className="h-64">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="ward" tick={{ fontSize: 12 }} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
+          <Tooltip
+            formatter={(value: number) => [`${value}%`, 'Response Rate']}
+          />
+          <Bar dataKey="rate" fill="#6366f1" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

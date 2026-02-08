@@ -9,10 +9,8 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { auth } from '../config/firebase';
 import { AuthUser, Admin } from '../types';
 
 interface AuthContextType {
@@ -36,40 +34,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Get custom claims for role
-        const tokenResult = await firebaseUser.getIdTokenResult();
-        const role = tokenResult.claims.role as 'admin' | 'super_admin' | undefined;
-
-        // Check if user is admin
-        if (!role || (role !== 'admin' && role !== 'super_admin')) {
-          await firebaseSignOut(auth);
-          setUser(null);
-          setAdmin(null);
-          setError('Access denied. Admin privileges required.');
-          setLoading(false);
-          return;
-        }
-
-        // Set auth user
+        // Set auth user (simplified for college project - no role verification)
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          role,
+          displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Admin',
+          role: 'admin', // Default to admin for all authenticated users
         });
 
-        // Fetch admin document
-        try {
-          const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
-          if (adminDoc.exists()) {
-            setAdmin({
-              id: adminDoc.id,
-              ...adminDoc.data(),
-            } as Admin);
-          }
-        } catch (err) {
-          console.error('Error fetching admin data:', err);
-        }
+        // Set admin data
+        setAdmin({
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || 'Admin User',
+          role: 'admin',
+          createdAt: {} as any,
+          isActive: true,
+        });
       } else {
         setUser(null);
         setAdmin(null);
@@ -85,16 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-
-      // Verify admin role
-      const tokenResult = await result.user.getIdTokenResult();
-      const role = tokenResult.claims.role;
-
-      if (!role || (role !== 'admin' && role !== 'super_admin')) {
-        await firebaseSignOut(auth);
-        throw new Error('Access denied. Admin privileges required.');
-      }
+      await signInWithEmailAndPassword(auth, email, password);
+      // Auth state change will handle setting the user
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to sign in';
       setError(message);

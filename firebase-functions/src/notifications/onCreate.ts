@@ -75,14 +75,7 @@ export const onNotificationCreate = functions
             aps: {
               alert: {
                 title: "Waste Pickup Scheduled",
-                "title-loc-key": "NOTIF_TITLE_PICKUP",
                 body: `Pickup for Ward ${data.wardNumber} on ${formattedDate} at ${data.scheduledTime}`,
-                "body-loc-key": "NOTIF_BODY_PICKUP",
-                "body-loc-args": [
-                  String(data.wardNumber),
-                  formattedDate,
-                  data.scheduledTime,
-                ],
               },
               badge: 1,
               sound: "default",

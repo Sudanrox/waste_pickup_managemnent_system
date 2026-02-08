@@ -7,6 +7,9 @@
 
 import UIKit
 import FirebaseCore
+import FirebaseAuth
+import FirebaseFirestore
+import FirebaseFunctions
 import FirebaseMessaging
 import UserNotifications
 
@@ -19,6 +22,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure Firebase
         FirebaseApp.configure()
 
+        // Connect to emulators in development
+        if EmulatorConfig.useEmulators {
+            configureEmulators()
+        }
+
         // Setup push notifications
         setupPushNotifications(application)
 
@@ -26,6 +34,27 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         Messaging.messaging().delegate = self
 
         return true
+    }
+
+    // MARK: - Emulator Configuration
+    private func configureEmulators() {
+        let host = EmulatorConfig.host
+
+        // Auth Emulator
+        Auth.auth().useEmulator(withHost: host, port: EmulatorConfig.authPort)
+        Logger.info("Connected to Auth emulator at \(host):\(EmulatorConfig.authPort)")
+
+        // Firestore Emulator
+        let settings = Firestore.firestore().settings
+        settings.host = "\(host):\(EmulatorConfig.firestorePort)"
+        settings.cacheSettings = MemoryCacheSettings()
+        settings.isSSLEnabled = false
+        Firestore.firestore().settings = settings
+        Logger.info("Connected to Firestore emulator at \(host):\(EmulatorConfig.firestorePort)")
+
+        // Functions Emulator
+        Functions.functions(region: "asia-south1").useEmulator(withHost: host, port: EmulatorConfig.functionsPort)
+        Logger.info("Connected to Functions emulator at \(host):\(EmulatorConfig.functionsPort)")
     }
 
     // MARK: - Push Notification Setup

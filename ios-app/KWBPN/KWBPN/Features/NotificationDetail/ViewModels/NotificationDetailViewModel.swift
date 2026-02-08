@@ -24,11 +24,17 @@ final class NotificationDetailViewModel: ObservableObject {
 
     // MARK: - Initialization
     init(
-        notificationService: PickupNotificationServiceProtocol = PickupNotificationService.shared,
-        responseService: ResponseServiceProtocol = ResponseService.shared
+        notificationService: PickupNotificationServiceProtocol? = nil,
+        responseService: ResponseServiceProtocol? = nil
     ) {
-        self.notificationService = notificationService
-        self.responseService = responseService
+        // Use demo services if demo mode is enabled
+        if DemoConfig.isEnabled {
+            self.notificationService = notificationService ?? DemoPickupNotificationService.shared
+            self.responseService = responseService ?? DemoResponseService.shared
+        } else {
+            self.notificationService = notificationService ?? PickupNotificationService.shared
+            self.responseService = responseService ?? ResponseService.shared
+        }
     }
 
     // MARK: - Public Methods

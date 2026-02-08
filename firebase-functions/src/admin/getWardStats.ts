@@ -101,7 +101,7 @@ async function getStatsForWard(wardNumber: number): Promise<WardStats> {
   let notificationCount = 0;
   let lastPickupDate: Date | null = null;
 
-  notificationsSnapshot.docs.forEach((doc) => {
+  for (const doc of notificationsSnapshot.docs) {
     const data = doc.data();
     const stats = data.responseStats;
 
@@ -114,15 +114,19 @@ async function getStatsForWard(wardNumber: number): Promise<WardStats> {
 
     // Track last pickup
     if (data.scheduledDate) {
-      const schedDate = data.scheduledDate.toDate();
+      const schedDate = data.scheduledDate.toDate() as Date;
       if (!lastPickupDate || schedDate > lastPickupDate) {
         lastPickupDate = schedDate;
       }
     }
-  });
+  }
 
   const averageResponseRate =
     notificationCount > 0 ? totalResponseRate / notificationCount : 0;
+
+  const lastPickupStr = lastPickupDate
+    ? (lastPickupDate as Date).toISOString().split("T")[0]
+    : null;
 
   return {
     wardNumber: wardNumber,
@@ -132,9 +136,7 @@ async function getStatsForWard(wardNumber: number): Promise<WardStats> {
     customerCount: wardData.customerCount || 0,
     recentNotifications: notificationsSnapshot.size,
     averageResponseRate: Math.round(averageResponseRate * 10) / 10,
-    lastPickupDate: lastPickupDate
-      ? lastPickupDate.toISOString().split("T")[0]
-      : null,
+    lastPickupDate: lastPickupStr,
   };
 }
 
@@ -181,27 +183,31 @@ async function getAllWardStats(): Promise<{
     let notificationCount = 0;
     let lastPickupDate: Date | null = null;
 
-    notificationsSnapshot.docs.forEach((doc) => {
+    for (const doc of notificationsSnapshot.docs) {
       const data = doc.data();
-      const stats = data.responseStats;
+      const statsData = data.responseStats;
 
-      if (stats && stats.totalCustomers > 0) {
+      if (statsData && statsData.totalCustomers > 0) {
         const responseRate =
-          ((stats.yesCount + stats.noCount) / stats.totalCustomers) * 100;
+          ((statsData.yesCount + statsData.noCount) / statsData.totalCustomers) * 100;
         totalResponseRate += responseRate;
         notificationCount++;
       }
 
       if (data.scheduledDate) {
-        const schedDate = data.scheduledDate.toDate();
+        const schedDate = data.scheduledDate.toDate() as Date;
         if (!lastPickupDate || schedDate > lastPickupDate) {
           lastPickupDate = schedDate;
         }
       }
-    });
+    }
 
     const averageResponseRate =
       notificationCount > 0 ? totalResponseRate / notificationCount : 0;
+
+    const lastPickupStr = lastPickupDate
+      ? (lastPickupDate as Date).toISOString().split("T")[0]
+      : null;
 
     const stats: WardStats = {
       wardNumber: wardNumber,
@@ -211,9 +217,7 @@ async function getAllWardStats(): Promise<{
       customerCount: wardData.customerCount || 0,
       recentNotifications: notificationsSnapshot.size,
       averageResponseRate: Math.round(averageResponseRate * 10) / 10,
-      lastPickupDate: lastPickupDate
-        ? lastPickupDate.toISOString().split("T")[0]
-        : null,
+      lastPickupDate: lastPickupStr,
     };
 
     wardStats.push(stats);

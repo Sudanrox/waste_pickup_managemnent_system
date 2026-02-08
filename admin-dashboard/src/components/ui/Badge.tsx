@@ -1,7 +1,11 @@
+/**
+ * Badge Component
+ * Display status labels and tags with various color variants
+ */
 import { clsx } from 'clsx';
 
 interface BadgeProps {
-  variant?: 'success' | 'warning' | 'error' | 'gray' | 'primary';
+  variant?: 'success' | 'warning' | 'error' | 'gray' | 'primary' | 'secondary' | 'danger';
   size?: 'sm' | 'md';
   children: React.ReactNode;
   className?: string;
@@ -17,7 +21,9 @@ export default function Badge({
     success: 'bg-success-50 text-success-600',
     warning: 'bg-warning-50 text-warning-600',
     error: 'bg-error-50 text-error-600',
+    danger: 'bg-error-50 text-error-600', // Alias for error
     gray: 'bg-gray-100 text-gray-600',
+    secondary: 'bg-gray-100 text-gray-600', // Alias for gray
     primary: 'bg-primary-50 text-primary-600',
   };
 
@@ -47,9 +53,9 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ status }: StatusBadgeProps) {
   const config = {
-    scheduled: { variant: 'primary' as const, label: 'Scheduled' },
-    sent: { variant: 'success' as const, label: 'Sent' },
-    completed: { variant: 'gray' as const, label: 'Completed' },
+    scheduled: { variant: 'warning' as const, label: 'Scheduled' },
+    sent: { variant: 'primary' as const, label: 'Sent' },
+    completed: { variant: 'success' as const, label: 'Completed' },
     cancelled: { variant: 'error' as const, label: 'Cancelled' },
   };
 

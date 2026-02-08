@@ -37,10 +37,28 @@ final class AppState: ObservableObject {
         authService: AuthServiceProtocol = AuthService.shared,
         customerService: CustomerServiceProtocol = CustomerService.shared
     ) {
-        self.authService = authService
-        self.customerService = customerService
-        setupAuthStateListener()
+        // Use demo services if demo mode is enabled
+        if DemoConfig.isEnabled {
+            self.authService = authService // Keep real auth service reference but we'll bypass it
+            self.customerService = DemoCustomerService.shared
+            setupDemoMode()
+        } else {
+            self.authService = authService
+            self.customerService = customerService
+            setupAuthStateListener()
+        }
         loadUserPreferences()
+    }
+
+    // MARK: - Demo Mode Setup
+    private func setupDemoMode() {
+        Logger.info("[DEMO MODE] Initializing with demo customer")
+        // Directly set authenticated state with demo customer
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000) // Brief splash screen
+            self.currentCustomer = DemoConfig.demoCustomer
+            self.authState = .authenticated
+        }
     }
 
     deinit {

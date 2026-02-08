@@ -100,6 +100,23 @@ struct OnboardingView: View {
                     viewModel.navigateTo(.phoneInput)
                 }
 
+                // Emulator test login button
+                if EmulatorConfig.useEmulators {
+                    Button {
+                        Task {
+                            await viewModel.testLoginWithEmulator()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "wrench.fill")
+                            Text("Test Login (Emulator)")
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                    }
+                    .padding(.top, 8)
+                }
+
                 Text("By continuing, you agree to our Terms of Service")
                     .font(.caption)
                     .foregroundColor(.secondary)

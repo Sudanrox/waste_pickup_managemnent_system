@@ -15,6 +15,14 @@ import {
   RefreshCw,
   Send,
 } from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+} from 'recharts';
 import Header from '../../components/layout/Header';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -24,6 +32,15 @@ import Badge, { StatusBadge } from '../../components/ui/Badge';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { notificationService } from '../../services/notification.service';
 import { format } from 'date-fns';
+
+// Helper: convert Firestore Timestamp or ISO string to Date
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toDate(value: any): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') return new Date(value);
+  if (value?.toDate) return value.toDate();
+  return new Date(value);
+}
 
 const rescheduleSchema = z.object({
   newDate: z.string().min(1, 'Please select a date'),
@@ -135,7 +152,7 @@ export default function NotificationDetailPage() {
     <div>
       <Header
         title={`Notification - Ward ${notification.wardNumber}`}
-        description={`Scheduled for ${format(notification.scheduledDate.toDate(), 'MMMM d, yyyy')}`}
+        description={`Scheduled for ${format(toDate(notification.scheduledDate), 'MMMM d, yyyy')}`}
         actions={
           <div className="flex gap-2">
             <Button
@@ -177,7 +194,7 @@ export default function NotificationDetailPage() {
               </span>
             </div>
             <span className="text-sm text-gray-500">
-              Created {format(notification.createdAt.toDate(), 'MMM d, yyyy h:mm a')}
+              Created {format(toDate(notification.createdAt), 'MMM d, yyyy h:mm a')}
             </span>
           </div>
         </Card>
@@ -275,7 +292,7 @@ export default function NotificationDetailPage() {
                   <div>
                     <p className="text-sm text-gray-500">Scheduled Date</p>
                     <p className="font-medium">
-                      {format(notification.scheduledDate.toDate(), 'MMMM d, yyyy')}
+                      {format(toDate(notification.scheduledDate), 'MMMM d, yyyy')}
                     </p>
                   </div>
                 </div>
@@ -315,6 +332,35 @@ export default function NotificationDetailPage() {
                 <p className="text-4xl font-bold text-gray-900">{responseRate}%</p>
                 <p className="text-sm text-gray-500">Response Rate</p>
               </div>
+
+              {/* Pie Chart */}
+              {stats.totalCustomers > 0 && (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Yes', value: stats.yesCount },
+                          { name: 'No', value: stats.noCount },
+                          { name: 'Pending', value: pendingCount },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        <Cell fill="#22c55e" />
+                        <Cell fill="#ef4444" />
+                        <Cell fill="#94a3b8" />
+                      </Pie>
+                      <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-success-50 rounded-lg">
@@ -415,7 +461,7 @@ export default function NotificationDetailPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {format(response.respondedAt.toDate(), 'MMM d, yyyy h:mm a')}
+                        {format(toDate(response.respondedAt), 'MMM d, yyyy h:mm a')}
                       </td>
                     </tr>
                   ))}

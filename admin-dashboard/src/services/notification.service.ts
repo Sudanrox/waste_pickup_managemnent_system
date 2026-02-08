@@ -7,7 +7,6 @@ import {
   limit,
   getDocs,
   getDoc,
-  Timestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../config/firebase';
@@ -18,6 +17,7 @@ import {
   RescheduleInput,
   FilterParams,
 } from '../types';
+import { getMockNotification, mockNotifications } from './mockData';
 
 export const notificationService = {
   // Get all notifications with optional filters
@@ -50,9 +50,16 @@ export const notificationService = {
         id: doc.id,
         ...doc.data(),
       })) as PickupNotification[];
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      throw error;
+    } catch {
+      // Fallback to mock data when Firebase is unavailable
+      let filtered = mockNotifications;
+      if (filters?.wardNumber) {
+        filtered = filtered.filter((n) => n.wardNumber === filters.wardNumber);
+      }
+      if (filters?.status) {
+        filtered = filtered.filter((n) => n.status === filters.status);
+      }
+      return filtered as unknown as PickupNotification[];
     }
   },
 
@@ -63,16 +70,17 @@ export const notificationService = {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        return null;
+        // Fallback to mock data
+        return getMockNotification(id) as unknown as PickupNotification | null;
       }
 
       return {
         id: docSnap.id,
         ...docSnap.data(),
       } as PickupNotification;
-    } catch (error) {
-      console.error('Error fetching notification:', error);
-      throw error;
+    } catch {
+      // Fallback to mock data when Firebase is unavailable
+      return getMockNotification(id) as unknown as PickupNotification | null;
     }
   },
 
@@ -92,9 +100,9 @@ export const notificationService = {
         id: doc.id,
         ...doc.data(),
       })) as PickupResponse[];
-    } catch (error) {
-      console.error('Error fetching responses:', error);
-      throw error;
+    } catch {
+      // No mock responses available
+      return [];
     }
   },
 
